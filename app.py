@@ -1,22 +1,45 @@
 from flask import Flask, jsonify, request
 
+from model.db_handler import match_exact, match_like
+
 app = Flask(__name__)
 
-ERROR_MESSAGE = {"status": "error"}
+ERROR_RESPONSE = {"status": "error"}
+SUCCESS_RESPONSE = {"status": "success"}
+PARTIAL_RESPONSE = {"status": "partial"}
+WORD_NOT_FOUND_RESPONSE = {"data": "word not found"}
 
 
-@app.get("/greet")
+@app.get("/")
 def index():
 
-    firstname, lastname = request.args.get("firstname"), request.args.get("lastname")
-
-    if firstname and (not lastname):
-        response = {"data": f"Hello, {firstname}!"}
-    elif (not firstname) and lastname:
-        response = {"data": f"Hello, Mr. or Ms. {lastname}!"}
-    elif firstname and lastname:
-        response = {"data": f"Is your name {firstname} {lastname}?"}
-    else:
-        return jsonify(ERROR_MESSAGE)
+    response = {"usage": "/dict?=<word>"}
 
     return jsonify(response)
+
+@app.get("/dict")
+def dictionary():
+
+    words = request.args.getlist("word")
+
+    if not words:
+        return ERROR_RESPONSE | {"word": words} | WORD_NOT_FOUND_RESPONSE
+
+    responses = {"words": []}
+    for word in words:
+        definitions = match_exact(word)
+
+        if definitions:
+            responses["words"].append(SUCCESS_RESPONSE | {"word": word} | {"data": definitions})
+            continue
+
+        definitions = match_like(word)
+
+        if definitions:
+            responses["words"].append(PARTIAL_RESPONSE | {"word": word} | {"data": definitions})
+            continue
+        else:
+            responses["words"].append(ERROR_RESPONSE | {"word": word} | WORD_NOT_FOUND_RESPONSE)
+            continue
+
+    return responses
